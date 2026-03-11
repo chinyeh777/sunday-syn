@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主日學排班系統 | Sunday Sync</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <div id="app" class="max-w-2xl mx-auto p-4 mt-8">
+        </div>
+
+    <script>
+        // --- 1. 系統預設資料 ---
+        const teachers = ["佳親", "聚芳", "玉雯", "明勝", "和進", "麗萍", "亞萍"];
+        const quarterDates = [
+            "4/12", "4/19", "4/26", "5/3", "5/10", "5/17", 
+            "5/24", "5/31", "6/7", "6/14", "6/21", "6/28"
+        ]; // 假設已排除 4/5 復活節
+
+        // 初始化模擬資料庫 (localStorage)
+        if (!localStorage.getItem('unavailabilities')) {
+            localStorage.setItem('unavailabilities', JSON.stringify({}));
+        }
+        let unavailabilities = JSON.parse(localStorage.getItem('unavailabilities'));
+
+        // --- 2. 路由邏輯 (判斷是老師還是管理員) ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentTeacher = urlParams.get('teacher');
+        const appDiv = document.getElementById('app');
+
+        if (currentTeacher && teachers.includes(currentTeacher)) {
+            renderTeacherView(currentTeacher);
+        } else {
+            renderAdminView();
+        }
+
+        // --- 3. 老師視角 (Teacher View) ---
+        function renderTeacherView(teacherName) {
+            let html = `
+                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
+                    <h1 class="text-2xl font-bold mb-2">您好，${teacherName} 老師！</h1>
+                    <p class="text-gray-600 mb-6">請勾選您本季 <span class="text-red-500 font-bold">無法</span> 參與服事的日期：</p>
+                    <form id="teacherForm">
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+            `;
+            
+            let teacherUnavail = unavailabilities[teacherName] || [];
+
+            quarterDates.forEach(date => {
+                const isChecked = teacherUnavail.includes(date) ? "checked" : "";
+                html += `
+                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-100 cursor-pointer transition">
+                        <input type="checkbox" name="dates" value="${date}" class="w-5 h-5 text-blue-600 rounded" ${isChecked}>
+                        <span class="ml-3 text-lg">${date} (日)</span>
+                    </label>
+                `;
+            });
+
+            html += `
+                        </div>
+                        <button type="button" onclick="submitAvailability('${teacherName}')" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">
+                            確認送出
+                        </button>
+                    </form>
+                </div>
+            `;
+            appDiv.innerHTML = html;
+        }
+
+        function submitAvailability(teacherName) {
+            const checkboxes = document.querySelectorAll('input[name="dates"]:checked');
+            const selectedDates = Array.from(checkboxhes).map(cb => cb.value);
+            
+            unavailabilities[teacherName] = selectedDates;
+            localStorage.setItem('unavailabilities', JSON.stringify(unavailabilities));
+            
+            appDiv.innerHTML = `
+                <div class="bg-white p-6 rounded-xl shadow-md text-center border-t-4 border-green-500">
+                    <h1 class="text-2xl font-bold text-green-600 mb-4">✅ 送出成功！</h1>
+                    <p class="text-gray-600">感謝 ${teacherName} 老師，您可以關閉此網頁了。</p>
+                </div>
+            `;
+        }
+
+        // --- 4. 管理員視角 (Admin View) ---
+        function renderAdminView() {
+            let html = `
+                <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
+                    <h1 class="text-2xl font-bold mb-4 flex justify-between items-center">
+                        系統管理後台
+                        <span class="text-sm bg-indigo-100 text-indigo-800 py-1 px-3 rounded-full">2026 Q2</span>
+                    </h1>
+                    
+                    <div class="mb-8">
+                        <h2 class="text-lg font-semibold border-b pb-2 mb-4">1. 發送意願調查</h2>
+                        <ul class="space-y-3">
+            `;
+
+            teachers.forEach(teacher => {
+                const hasFilled = unavailabilities[teacher] ? `<span class="text-green-500 text-sm">✅ 已填寫</span>` : `<span class="text-red-400 text-sm">⏳ 未填寫</span>`;
+                // 這裡動態抓取目前的網址來產生專屬連結
+                const link = `${window.location.origin}${window.location.pathname}?teacher=${teacher}`;
+                html += `
+                    <li class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border">
+                        <div>
+                            <span class="font-bold w-16 inline-block">${teacher}</span> 
+                            ${hasFilled}
+                        </div>
+                        <button onclick="copyToClipboard('${link}')" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded transition">
+                            📋 複製專屬連結
+                        </button>
+                    </li>
+                `;
+            });
+
+            html += `
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h2 class="text-lg font-semibold border-b pb-2 mb-4">2. 產生課表</h2>
+                        <button onclick="generateSchedule()" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-lg">
+                            🚀 一鍵自動排班
+                        </button>
+                    </div>
+                    
+                    <div id="scheduleResult" class="mt-8 hidden"></div>
+                </div>
+            `;
+            appDiv.innerHTML = html;
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert("已複製專屬連結！可以貼到 LINE 給老師了。");
+            });
+        }
+
+        // --- 5. 核心排班演算法 (簡易版示範) ---
+        function generateSchedule() {
+            const resultDiv = document.getElementById('scheduleResult');
+            resultDiv.classList.remove('hidden');
+            
+            // 追蹤每位老師排班次數與上次排班日期
+            let teacherStats = {};
+            teachers.forEach(t => teacherStats[t] = { count: 0, lastDateIndex: -2 });
+
+            let scheduleHTML = `
+                <h3 class="text-xl font-bold mb-4">排班結果草稿</h3>
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-2 border">日期</th>
+                            <th class="p-2 border text-blue-600">主教</th>
+                            <th class="p-2 border text-green-600">助教</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            quarterDates.forEach((date, dateIndex) => {
+                let assignedThisWeek = [];
+                
+                // 找出這週可以排的老師 (過濾掉: 說不行的、這週已排的、連兩週的、超過3次的)
+                let availableTeachers = teachers.filter(t => {
+                    const unavail = unavailabilities[t] || [];
+                    if (unavail.includes(date)) return false; // 老師請假
+                    if (teacherStats[t].lastDateIndex === dateIndex - 1) return false; // 不連2次
+                    if (teacherStats[t].count >= 3) return false; // 不超過3次
+                    return true;
+                });
+
+                // 隨機打亂陣列，確保公平性
+                availableTeachers = availableTeachers.sort(() => Math.random() - 0.5);
+
+                let mainTeacher = "⚠️ 留空";
+                let assistantTeacher = "⚠️ 留空";
+
+                if (availableTeachers.length > 0) {
+                    mainTeacher = availableTeachers.shift();
+                    teacherStats[mainTeacher].count++;
+                    teacherStats[mainTeacher].lastDateIndex = dateIndex;
+                }
+                
+                if (availableTeachers.length > 0) {
+                    assistantTeacher = availableTeachers.shift();
+                    teacherStats[assistantTeacher].count++;
+                    teacherStats[assistantTeacher].lastDateIndex = dateIndex;
+                }
+
+                scheduleHTML += `
+                    <tr>
+                        <td class="p-2 border font-medium">${date}</td>
+                        <td class="p-2 border">${mainTeacher}</td>
+                        <td class="p-2 border">${assistantTeacher}</td>
+                    </tr>
+                `;
+            });
+
+            scheduleHTML += `
+                    </tbody>
+                </table>
+                <p class="text-sm text-gray-500 mt-2">* 標示「⚠️ 留空」代表無合適老師，需手動協調。</p>
+            `;
+            resultDiv.innerHTML = scheduleHTML;
+        }
+    </script>
+</body>
+</html>
