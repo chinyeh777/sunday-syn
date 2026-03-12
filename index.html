@@ -8,6 +8,9 @@
     <style>
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px;}
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* 隱藏原生 select 的箭頭，讓畫面更乾淨 */
+        select.editable-cell { appearance: none; background-color: transparent; width: 100%; cursor: pointer; outline: none; }
+        select.editable-cell:hover { background-color: rgba(0,0,0,0.05); }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
@@ -19,33 +22,26 @@
     </div>
 
     <script>
-        // ==========================================
-        // 1. 系統設定與 API 網址 (你的專屬金鑰)
-        // ==========================================
+        // --- 1. 系統設定與 API 網址 ---
         const API_URL = "https://script.google.com/macros/s/AKfycbzpZM0nl7DV2z6jZ0Y1YkLcK4l682jjubT0ilQFR0IeXbCgRYpTIw-FELU53lgUBqAF-Q/exec";
         const teachers = ["佳親", "聚芳", "玉雯", "明勝", "和進", "麗萍", "亞萍"];
         
-        // 全域變數，用來暫存從雲端抓下來的資料
         let dbData = { quarters: {} }; 
         const appDiv = document.getElementById('app');
         const urlParams = new URLSearchParams(window.location.search);
         
-        const view = urlParams.get('view') || 'dashboard'; // 預設視角為季度大廳
+        const view = urlParams.get('view') || 'dashboard';
         const currentQuarterId = urlParams.get('q');
         const currentTeacher = urlParams.get('teacher');
 
-        // ==========================================
-        // 2. 資料庫讀寫功能 (與 Google Sheets 溝通)
-        // ==========================================
+        // --- 2. 資料庫讀寫 ---
         async function loadData() {
             try {
                 const response = await fetch(API_URL);
                 const text = await response.text();
-                if(text && text !== "{}") {
-                    dbData = JSON.parse(text);
-                }
+                if(text && text !== "{}") dbData = JSON.parse(text);
                 if(!dbData.quarters) dbData.quarters = {};
-                route(); // 資料載入完畢，開始渲染畫面
+                route(); 
             } catch (error) {
                 appDiv.innerHTML = `<div class="text-red-500 p-4 bg-red-100 rounded">資料載入失敗，請確認網路連線。</div>`;
             }
@@ -57,11 +53,7 @@
             if(btn.tagName === 'BUTTON') btn.innerHTML = `<div class="loader"></div> ${loadingMsg}`;
             
             try {
-                await fetch(API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(dbData),
-                    // mode: 'no-cors' // 在某些情況下 GAS 需要加這個，但我們設定所有人可存取通常不用
-                });
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify(dbData) });
                 if(btn.tagName === 'BUTTON') btn.innerHTML = "✅ 儲存成功";
                 setTimeout(() => { if(btn.tagName === 'BUTTON') btn.innerHTML = originalText; }, 1500);
                 return true;
@@ -72,65 +64,46 @@
             }
         }
 
-        // ==========================================
-        // 3. 路由控制 (決定顯示哪個畫面)
-        // ==========================================
+        // --- 3. 路由控制 ---
         function route() {
-            if (currentTeacher && currentQuarterId) {
-                renderTeacherView();
-            } else if (view === 'create_quarter') {
-                renderCreateQuarter();
-            } else if (view === 'admin_quarter' && currentQuarterId) {
-                renderAdminQuarter();
-            } else {
-                renderDashboard();
-            }
+            if (currentTeacher && currentQuarterId) renderTeacherView();
+            else if (view === 'create_quarter') renderCreateQuarter();
+            else if (view === 'admin_quarter' && currentQuarterId) renderAdminQuarter();
+            else renderDashboard();
         }
 
-        // ==========================================
-        // 4. 畫面 A：第一層 - 季度大廳 (Dashboard)
-        // ==========================================
+        // --- 4. 畫面 A：第一層 - 季度大廳 ---
         function renderDashboard() {
             let html = `
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
                     <div class="flex justify-between items-center mb-6">
                         <h1 class="text-2xl font-bold text-gray-800">📅 Sunday Sync 季度大廳</h1>
-                        <a href="?view=create_quarter" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition shadow-sm">
-                            ＋ 新增季排程
-                        </a>
+                        <a href="?view=create_quarter" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition shadow-sm">＋ 新增季排程</a>
                     </div>
-                    
                     <div class="space-y-4">
             `;
-            
             const qKeys = Object.keys(dbData.quarters).sort().reverse();
-            
             if (qKeys.length === 0) {
                 html += `<div class="text-center py-8 text-gray-400 bg-gray-50 rounded-lg border border-dashed">目前沒有排程資料，請點擊右上方新增。</div>`;
             } else {
                 qKeys.forEach(key => {
                     const q = dbData.quarters[key];
                     html += `
-                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-gray-50 p-4 rounded-lg border hover:shadow-md transition">
+                        <div class="flex justify-between items-center bg-gray-50 p-4 rounded-lg border hover:shadow-md transition">
                             <div>
                                 <h2 class="text-lg font-bold text-gray-800">${q.name}</h2>
                                 <p class="text-sm text-gray-500">共 ${q.activeDates.length} 週需排課</p>
                             </div>
-                            <a href="?view=admin_quarter&q=${key}" class="mt-3 sm:mt-0 bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-4 py-2 rounded font-medium transition">
-                                進入管理 ➔
-                            </a>
+                            <a href="?view=admin_quarter&q=${key}" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-4 py-2 rounded font-medium transition">進入管理 ➔</a>
                         </div>
                     `;
                 });
             }
-
             html += `</div></div>`;
             appDiv.innerHTML = html;
         }
 
-        // ==========================================
-        // 5. 畫面 B：新增季度與排除假日
-        // ==========================================
+        // --- 5. 畫面 B：新增季度與排除假日 ---
         function renderCreateQuarter() {
             appDiv.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
@@ -138,99 +111,70 @@
                         <a href="?" class="text-gray-500 hover:text-indigo-600 mr-4 text-xl">⬅️</a>
                         <h1 class="text-2xl font-bold">新增季排程</h1>
                     </div>
-                    
                     <div class="mb-4 grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">年份</label>
-                            <select id="yearSelect" class="w-full border-gray-300 rounded-lg shadow-sm p-2 border" onchange="generateSundays()">
-                                <option value="2025">2025</option>
-                                <option value="2026" selected>2026</option>
-                                <option value="2027">2027</option>
+                            <select id="yearSelect" class="w-full border-gray-300 rounded-lg p-2 border" onchange="generateSundays()">
+                                <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">季度</label>
-                            <select id="quarterSelect" class="w-full border-gray-300 rounded-lg shadow-sm p-2 border" onchange="generateSundays()">
-                                <option value="1">第一季 (1-3月)</option>
-                                <option value="2">第二季 (4-6月)</option>
-                                <option value="3">第三季 (7-9月)</option>
-                                <option value="4">第四季 (10-12月)</option>
+                            <select id="quarterSelect" class="w-full border-gray-300 rounded-lg p-2 border" onchange="generateSundays()">
+                                <option value="1">第一季</option><option value="2">第二季</option><option value="3">第三季</option><option value="4">第四季</option>
                             </select>
                         </div>
                     </div>
-
                     <div class="mt-6">
-                        <h3 class="font-bold text-gray-800 mb-2 border-b pb-2">請取消勾選「不排課」的日期 (如連假、特別聚會)：</h3>
-                        <div id="sundaysList" class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-gray-50 p-4 rounded-lg border">
-                            </div>
+                        <h3 class="font-bold text-gray-800 mb-2 border-b pb-2">取消勾選「不排課」的日期：</h3>
+                        <div id="sundaysList" class="grid grid-cols-3 gap-3 bg-gray-50 p-4 rounded-lg border"></div>
                     </div>
-
-                    <button onclick="saveNewQuarter()" class="mt-8 w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">
-                        建立季度並開始排班
-                    </button>
+                    <button onclick="saveNewQuarter()" class="mt-8 w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">建立季度</button>
                 </div>
             `;
-            generateSundays(); // 初始化跑一次
+            generateSundays(); 
         }
 
         function generateSundays() {
             const year = parseInt(document.getElementById('yearSelect').value);
             const q = parseInt(document.getElementById('quarterSelect').value);
             const listDiv = document.getElementById('sundaysList');
-            
-            const startMonth = (q - 1) * 3; // 0-based
+            const startMonth = (q - 1) * 3; 
             let d = new Date(year, startMonth, 1);
             let sundays = [];
-
-            // 找星期日
             while (d.getMonth() < startMonth + 3) {
-                if (d.getDay() === 0) {
-                    sundays.push(`${d.getMonth() + 1}/${d.getDate()}`);
-                }
+                if (d.getDay() === 0) sundays.push(`${d.getMonth() + 1}/${d.getDate()}`);
                 d.setDate(d.getDate() + 1);
             }
-
-            let html = '';
-            sundays.forEach(date => {
-                html += `
-                    <label class="flex items-center p-2 bg-white border rounded shadow-sm cursor-pointer hover:bg-indigo-50">
-                        <input type="checkbox" value="${date}" class="w-4 h-4 text-indigo-600 rounded mr-2" checked>
-                        <span>${date} (日)</span>
-                    </label>
-                `;
-            });
-            listDiv.innerHTML = html;
+            listDiv.innerHTML = sundays.map(date => `
+                <label class="flex items-center p-2 bg-white border rounded shadow-sm cursor-pointer hover:bg-indigo-50">
+                    <input type="checkbox" value="${date}" class="w-4 h-4 text-indigo-600 rounded mr-2" checked>
+                    <span>${date}</span>
+                </label>
+            `).join('');
         }
 
         async function saveNewQuarter() {
-            const year = document.getElementById('yearSelect').value;
+            const y = document.getElementById('yearSelect').value;
             const q = document.getElementById('quarterSelect').value;
-            const qId = `${year}-Q${q}`;
-            const qName = `${year}年 第${q}季`;
+            const qId = `${y}-Q${q}`;
+            const activeDates = Array.from(document.querySelectorAll('#sundaysList input:checked')).map(cb => cb.value);
+
+            if(activeDates.length === 0) return alert("請至少保留一天！");
             
-            const checkedBoxes = document.querySelectorAll('#sundaysList input[type="checkbox"]:checked');
-            const activeDates = Array.from(checkedBoxes).map(cb => cb.value);
-
-            if(activeDates.length === 0) return alert("請至少保留一天需要排課的日子！");
-
-            // 初始化這季的資料結構
             dbData.quarters[qId] = {
-                name: qName,
+                name: `${y}年 第${q}季`,
                 activeDates: activeDates,
                 unavailabilities: {},
-                scheduleHTML: "" // 存排班結果
+                scheduleData: null // 改存結構化陣列
             };
-
-            const success = await saveData("建立中...");
-            if(success) window.location.href = `?view=admin_quarter&q=${qId}`;
+            if(await saveData("建立中...")) window.location.href = `?view=admin_quarter&q=${qId}`;
         }
 
-        // ==========================================
-        // 6. 畫面 C：第二層 - 季度工作台 (管理員)
-        // ==========================================
+        // --- 6. 畫面 C：第二層 - 季度工作台 ---
         function renderAdminQuarter() {
             const qData = dbData.quarters[currentQuarterId];
-            if(!qData) return alert("找不到此季度的資料！");
+            if(!qData) return alert("找不到資料！");
 
             let html = `
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-600">
@@ -242,23 +186,16 @@
                     </div>
                     
                     <div class="mb-8">
-                        <h2 class="text-lg font-semibold mb-3 flex items-center">📝 1. 發送意願調查連結</h2>
+                        <h2 class="text-lg font-semibold mb-3">📝 1. 發送調查連結</h2>
                         <ul class="space-y-2">
             `;
-
             teachers.forEach(teacher => {
-                const hasFilled = qData.unavailabilities[teacher] ? `<span class="text-green-600 text-sm font-bold bg-green-100 px-2 py-1 rounded">✅ 已填寫</span>` : `<span class="text-red-500 text-sm font-bold bg-red-100 px-2 py-1 rounded">⏳ 未填寫</span>`;
-                // 產生這季的專屬連結
+                const hasFilled = qData.unavailabilities[teacher] ? `<span class="text-green-600 text-sm font-bold bg-green-100 px-2 rounded">✅ 已填寫</span>` : `<span class="text-red-500 text-sm font-bold bg-red-100 px-2 rounded">⏳ 未填</span>`;
                 const link = `${window.location.origin}${window.location.pathname}?q=${currentQuarterId}&teacher=${teacher}`;
                 html += `
-                    <li class="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-gray-50 p-3 rounded-lg border">
-                        <div class="mb-2 sm:mb-0 flex justify-between w-full sm:w-auto pr-4">
-                            <span class="font-bold w-16 inline-block">${teacher}</span> 
-                            ${hasFilled}
-                        </div>
-                        <button onclick="copyToClipboard('${link}')" class="text-sm bg-white border shadow-sm hover:bg-gray-100 text-gray-700 py-1.5 px-3 rounded transition flex-shrink-0">
-                            📋 複製專屬連結
-                        </button>
+                    <li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg border">
+                        <div><span class="font-bold w-16 inline-block">${teacher}</span> ${hasFilled}</div>
+                        <button onclick="copyToClipboard('${link}')" class="text-sm bg-white border hover:bg-gray-100 px-3 py-1 rounded">📋 複製連結</button>
                     </li>
                 `;
             });
@@ -267,103 +204,148 @@
                         </ul>
                     </div>
                     
+                    <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                        <h2 class="text-lg font-semibold mb-3">⚙️ 2. 排班參數設定</h2>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div><label>每人最多 主教 (次):</label><input type="number" id="p_maxMain" value="3" min="1" class="w-full mt-1 p-1 border rounded"></div>
+                            <div><label>每人最多 助教 (次):</label><input type="number" id="p_maxAsst" value="3" min="1" class="w-full mt-1 p-1 border rounded"></div>
+                            <div><label>最多連續 主教 (次):</label><input type="number" id="p_consMain" value="2" min="1" class="w-full mt-1 p-1 border rounded"></div>
+                            <div><label>最多連續 助教 (次):</label><input type="number" id="p_consAsst" value="2" min="1" class="w-full mt-1 p-1 border rounded"></div>
+                        </div>
+                    </div>
+
                     <div>
-                        <h2 class="text-lg font-semibold mb-3 flex items-center">🤖 2. 自動運算班表</h2>
-                        <button onclick="generateSchedule()" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition shadow-md">
-                            🚀 立即產生課表草稿
+                        <button onclick="runAlgorithm()" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">
+                            🤖 3. 依照參數自動運算班表
                         </button>
                     </div>
                     
-                    <div id="scheduleResult" class="mt-8 ${qData.scheduleHTML ? '' : 'hidden'}">
-                        ${qData.scheduleHTML || ''}
-                    </div>
+                    <div id="scheduleResult" class="mt-8"></div>
                 </div>
             `;
             appDiv.innerHTML = html;
+            
+            // 如果已經有存好的資料，就直接畫出表格
+            if(qData.scheduleData) renderScheduleTable();
         }
 
         function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert("已複製！請貼到 LINE 傳給老師。");
-            });
+            navigator.clipboard.writeText(text).then(() => alert("已複製！"));
         }
 
-        // ==========================================
-        // 7. 畫面 D：老師手機端填寫頁面
-        // ==========================================
+        // --- 7. 畫面 D：老師填寫 ---
         function renderTeacherView() {
             const qData = dbData.quarters[currentQuarterId];
-            if(!qData) return appDiv.innerHTML = "找不到此季度的調查表。";
-
             let html = `
                 <div class="bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500">
                     <h1 class="text-2xl font-bold mb-1">您好，${currentTeacher} 老師！</h1>
-                    <p class="text-gray-500 mb-6 font-medium">${qData.name} 意願調查</p>
-                    
-                    <div class="bg-blue-50 text-blue-800 p-3 rounded-lg mb-6 text-sm">
-                        ⚠️ 請勾選下方您 <span class="font-bold text-red-500">無法</span> 參與服事的日期。若皆可排班，請直接滑到最下方按送出即可。
-                    </div>
-                    
-                    <form id="teacherForm">
-                        <div class="grid grid-cols-2 gap-3 mb-6">
+                    <p class="text-gray-500 mb-6">${qData.name} 意願調查</p>
+                    <div class="bg-blue-50 text-blue-800 p-3 rounded-lg mb-6 text-sm">請勾選您 <span class="font-bold text-red-500">無法</span> 服事的日期。</div>
+                    <form><div class="grid grid-cols-2 gap-3 mb-6">
             `;
-            
-            let teacherUnavail = qData.unavailabilities[currentTeacher] || [];
-
+            let unavail = qData.unavailabilities[currentTeacher] || [];
             qData.activeDates.forEach(date => {
-                const isChecked = teacherUnavail.includes(date) ? "checked" : "";
+                const isChecked = unavail.includes(date) ? "checked" : "";
                 html += `
-                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition ${isChecked ? 'bg-red-50 border-red-200' : 'bg-white'}">
-                        <input type="checkbox" name="dates" value="${date}" class="w-5 h-5 text-red-500 rounded border-gray-300 focus:ring-red-500" ${isChecked}>
-                        <span class="ml-3 text-lg font-medium">${date} (日)</span>
+                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer ${isChecked ? 'bg-red-50 border-red-200' : 'bg-white'}">
+                        <input type="checkbox" name="dates" value="${date}" class="w-5 h-5 text-red-500 rounded" ${isChecked}>
+                        <span class="ml-3 text-lg font-medium">${date}</span>
                     </label>
                 `;
             });
-
-            html += `
-                        </div>
-                        <button type="button" onclick="submitAvailability()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition shadow-lg text-lg">
-                            ✅ 確認並送出
-                        </button>
-                    </form>
-                </div>
-            `;
+            html += `</div><button type="button" onclick="submitAvailability()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 text-lg">✅ 確認並送出</button></form></div>`;
             appDiv.innerHTML = html;
         }
 
         async function submitAvailability() {
-            const checkboxes = document.querySelectorAll('input[name="dates"]:checked');
-            const selectedDates = Array.from(checkboxes).map(cb => cb.value);
-            
-            // 更新本季這位老師的資料
+            const selectedDates = Array.from(document.querySelectorAll('input[name="dates"]:checked')).map(cb => cb.value);
             dbData.quarters[currentQuarterId].unavailabilities[currentTeacher] = selectedDates;
-            
-            const success = await saveData("資料送出中...");
-            if(success) {
-                appDiv.innerHTML = `
-                    <div class="bg-white p-8 rounded-xl shadow-md text-center border-t-4 border-green-500 mt-10">
-                        <div class="text-5xl mb-4">🙌</div>
-                        <h1 class="text-2xl font-bold text-green-700 mb-2">送出成功！</h1>
-                        <p class="text-gray-600">感謝 ${currentTeacher} 老師的填寫與服事。<br>您可以直接關閉此網頁了。</p>
-                    </div>
-                `;
+            if(await saveData("資料送出中...")) {
+                appDiv.innerHTML = `<div class="bg-white p-8 rounded-xl text-center border-t-4 border-green-500 mt-10"><h1 class="text-2xl font-bold text-green-700 mb-2">送出成功！</h1><p>您可以關閉此網頁了。</p></div>`;
             }
         }
 
-        // ==========================================
-        // 8. 核心排班演算法 (保存結果到資料庫)
-        // ==========================================
-        async function generateSchedule() {
+        // --- 8. 演算法升級：參數化排班 ---
+        async function runAlgorithm() {
             const qData = dbData.quarters[currentQuarterId];
             
-            let teacherStats = {};
-            teachers.forEach(t => teacherStats[t] = { count: 0, lastDateIndex: -2 });
+            // 讀取面板上的參數
+            const p = {
+                maxMain: parseInt(document.getElementById('p_maxMain').value) || 99,
+                maxAsst: parseInt(document.getElementById('p_maxAsst').value) || 99,
+                consMain: parseInt(document.getElementById('p_consMain').value) || 99,
+                consAsst: parseInt(document.getElementById('p_consAsst').value) || 99
+            };
 
-            let scheduleHTML = `
+            let stats = {};
+            teachers.forEach(t => stats[t] = { mainCount: 0, asstCount: 0, consMain: 0, consAsst: 0 });
+            
+            let schedule = []; // 結構化陣列
+
+            qData.activeDates.forEach((date) => {
+                // 1. 找主教
+                let availableMain = teachers.filter(t => {
+                    const unavail = qData.unavailabilities[t] || [];
+                    if (unavail.includes(date)) return false; 
+                    if (stats[t].mainCount >= p.maxMain) return false; 
+                    if (stats[t].consMain >= p.consMain) return false; 
+                    return true;
+                }).sort(() => Math.random() - 0.5);
+
+                let selectedMain = availableMain.length > 0 ? availableMain[0] : "⚠️ 留空";
+
+                // 2. 找助教
+                let availableAsst = teachers.filter(t => {
+                    if (t === selectedMain) return false; // 不能同時兼任
+                    const unavail = qData.unavailabilities[t] || [];
+                    if (unavail.includes(date)) return false; 
+                    if (stats[t].asstCount >= p.maxAsst) return false; 
+                    if (stats[t].consAsst >= p.consAsst) return false; 
+                    return true;
+                }).sort(() => Math.random() - 0.5);
+
+                let selectedAsst = availableAsst.length > 0 ? availableAsst[0] : "⚠️ 留空";
+
+                // 3. 更新統計數據
+                teachers.forEach(t => {
+                    if(t === selectedMain) {
+                        stats[t].mainCount++; stats[t].consMain++; stats[t].consAsst = 0;
+                    } else if(t === selectedAsst) {
+                        stats[t].asstCount++; stats[t].consAsst++; stats[t].consMain = 0;
+                    } else {
+                        stats[t].consMain = 0; stats[t].consAsst = 0;
+                    }
+                });
+
+                schedule.push({ date: date, main: selectedMain, asst: selectedAsst });
+            });
+
+            // 儲存陣列到資料庫
+            qData.scheduleData = schedule;
+            if(await saveData("運算與儲存中...")) {
+                renderScheduleTable();
+            }
+        }
+
+        // --- 9. 渲染可手動編輯的表格 ---
+        function renderScheduleTable() {
+            const qData = dbData.quarters[currentQuarterId];
+            const resultDiv = document.getElementById('scheduleResult');
+            
+            // 產生下拉選單的選項
+            const getOptions = (selectedVal) => {
+                let opts = `<option value="⚠️ 留空" ${selectedVal === "⚠️ 留空" ? "selected" : ""}>⚠️ 留空</option>`;
+                teachers.forEach(t => {
+                    opts += `<option value="${t}" ${selectedVal === t ? "selected" : ""}>${t}</option>`;
+                });
+                return opts;
+            };
+
+            let html = `
                 <div class="flex justify-between items-center mb-4 border-t pt-6">
-                    <h3 class="text-xl font-bold text-gray-800">📋 本季排班草稿</h3>
+                    <h3 class="text-xl font-bold text-gray-800">📋 排班結果 (可點擊名字修改)</h3>
                     <button onclick="copyTableForExcel()" class="text-sm bg-green-600 hover:bg-green-700 text-white py-1.5 px-3 rounded transition">
-                        📊 複製表格 (貼上Excel)
+                        📊 複製貼至 Excel
                     </button>
                 </div>
                 <div class="overflow-x-auto">
@@ -378,54 +360,46 @@
                     <tbody>
             `;
 
-            qData.activeDates.forEach((date, dateIndex) => {
-                let availableTeachers = teachers.filter(t => {
-                    const unavail = qData.unavailabilities[t] || [];
-                    if (unavail.includes(date)) return false; 
-                    if (teacherStats[t].lastDateIndex === dateIndex - 1) return false; 
-                    if (teacherStats[t].count >= 3) return false; 
-                    return true;
-                });
-
-                availableTeachers = availableTeachers.sort(() => Math.random() - 0.5);
-
-                let mainTeacher = "⚠️ 留空";
-                let assistantTeacher = "⚠️ 留空";
-
-                if (availableTeachers.length > 0) {
-                    mainTeacher = availableTeachers.shift();
-                    teacherStats[mainTeacher].count++;
-                    teacherStats[mainTeacher].lastDateIndex = dateIndex;
-                }
-                
-                if (availableTeachers.length > 0) {
-                    assistantTeacher = availableTeachers.shift();
-                    teacherStats[assistantTeacher].count++;
-                    teacherStats[assistantTeacher].lastDateIndex = dateIndex;
-                }
-
-                scheduleHTML += `
+            qData.scheduleData.forEach((row, index) => {
+                html += `
                     <tr class="hover:bg-indigo-50 transition border-b">
-                        <td class="p-3 border-x font-bold text-gray-700">${date}</td>
-                        <td class="p-3 border-x ${mainTeacher.includes('⚠️') ? 'text-red-500 font-bold bg-red-50' : 'text-blue-700'}">${mainTeacher}</td>
-                        <td class="p-3 border-x ${assistantTeacher.includes('⚠️') ? 'text-red-500 font-bold bg-red-50' : 'text-green-700'}">${assistantTeacher}</td>
+                        <td class="p-3 border-x font-bold text-gray-700 w-1/4">${row.date}</td>
+                        <td class="p-2 border-x w-1/3 ${row.main === '⚠️ 留空' ? 'bg-red-50' : ''}">
+                            <select class="editable-cell ${row.main === '⚠️ 留空' ? 'text-red-500 font-bold' : 'text-blue-700 font-medium'}" 
+                                    onchange="updateCell(${index}, 'main', this.value)">
+                                ${getOptions(row.main)}
+                            </select>
+                        </td>
+                        <td class="p-2 border-x w-1/3 ${row.asst === '⚠️ 留空' ? 'bg-red-50' : ''}">
+                            <select class="editable-cell ${row.asst === '⚠️ 留空' ? 'text-red-500 font-bold' : 'text-green-700 font-medium'}" 
+                                    onchange="updateCell(${index}, 'asst', this.value)">
+                                ${getOptions(row.asst)}
+                            </select>
+                        </td>
                     </tr>
                 `;
             });
 
-            scheduleHTML += `</tbody></table></div>`;
-            
-            // 將生成的 HTML 存回資料庫
-            qData.scheduleHTML = scheduleHTML;
-            const success = await saveData("運算與儲存中...");
-            if(success) {
-                const resultDiv = document.getElementById('scheduleResult');
-                resultDiv.innerHTML = scheduleHTML;
-                resultDiv.classList.remove('hidden');
-            }
+            html += `</tbody></table></div>
+                <p class="text-xs text-gray-400 mt-2">* 修改下拉選單後，系統會在背景自動儲存。</p>
+            `;
+            resultDiv.innerHTML = html;
         }
 
-        // 方便貼上 Excel 的小功能
+        // --- 10. 處理手動修改並自動儲存 ---
+        function updateCell(rowIndex, role, newValue) {
+            const qData = dbData.quarters[currentQuarterId];
+            qData.scheduleData[rowIndex][role] = newValue;
+            
+            // 背景靜默儲存，不打擾使用者操作
+            fetch(API_URL, { method: 'POST', body: JSON.stringify(dbData) })
+                .then(() => console.log('手動修改已儲存'))
+                .catch(() => alert('儲存失敗，請檢查網路。'));
+            
+            // 重新渲染表格以更新顏色
+            renderScheduleTable();
+        }
+
         function copyTableForExcel() {
             const table = document.getElementById('scheduleTable');
             const range = document.createRange();
@@ -437,9 +411,7 @@
             alert('表格已複製！打開 Excel (或 Google Sheets) 按下 Ctrl+V 貼上即可。');
         }
 
-        // 啟動程式：一進網頁就去雲端抓資料
         window.onload = loadData;
-
     </script>
 </body>
 </html>
